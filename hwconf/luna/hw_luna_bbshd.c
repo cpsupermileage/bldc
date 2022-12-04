@@ -450,6 +450,7 @@ int8_t hw_read_initial_assist_level(void) {
 	return (int8_t)assist_level.as_i32;
 }
 
+
 float hw_read_motor_temp(float beta) {
 	static float sensor_resistance = 1000;
 	UTILS_LP_FAST(sensor_resistance, NTC_RES_MOTOR(ADC_Value[ADC_IND_TEMP_MOTOR]), 0.1);
