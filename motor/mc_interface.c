@@ -2223,27 +2223,39 @@ static void update_override_limits(volatile motor_if_state_t *motor, volatile mc
 	switch(conf->m_motor_temp_sens_type) {
 
 	case TEMP_SENSOR_NTC_10K_25C:
-
-		if ( ADC_VOLTS(ADC_IND_TEMP_MOTOR) > 0.4 )
 		{
-				temp_motor = is_motor_1 ? NTC_TEMP_MOTOR(conf->m_ntc_motor_beta) : NTC_TEMP_MOTOR_2(conf->m_ntc_motor_beta);
-				temp_motor_old = temp_motor;
-				rpm_triggered = 0;
+			int dt = chVTTimeElapsedSinceX (rpm_time);
 
-				// Tacho reset
-				if ( chVTTimeElapsedSinceX (rpm_time) > CH_CFG_ST_FREQUENCY ) motor->m_tacho_dt = 0;
-		} else {
-			if (rpm_triggered == 0)
+			// Tacho reset on timeout
+			if ( dt > CH_CFG_ST_FREQUENCY ) motor->m_tacho_dt = 0;
+
+			// Check for speed interrupt
+			if ( ADC_VOLTS(ADC_IND_TEMP_MOTOR) > 0.4 )
 			{
-				systime_t rpm_time_new = chVTGetSystemTime();
-				motor->m_tacho_dt = rpm_time_new - rpm_time;
-				// 10 / (CH_CFG_ST_FREQUENCY * ( rpm_time_new - rpm_time ));
-				rpm_time = rpm_time_new;
-			} 
-			rpm_triggered = 1;
-			temp_motor = temp_motor_old;
+				
+				rpm_triggered = 0;
+				// Make sure time has passed since trigger
+				if ( dt > 150 )
+				{
+					temp_motor = is_motor_1 ? NTC_TEMP_MOTOR(conf->m_ntc_motor_beta) : NTC_TEMP_MOTOR_2(conf->m_ntc_motor_beta);
+					temp_motor_old = temp_motor;
+				} else {
+					temp_motor = temp_motor_old;
+				}
+			} else {
+				// Check For Negedge
+				if (rpm_triggered == 0)
+				{
+					systime_t rpm_time_new = chVTGetSystemTime();
+					motor->m_tacho_dt = dt;
+					// motor->m_tacho_dt = rpm_time_new - rpm_time;
+					// 10 / (CH_CFG_ST_FREQUENCY * ( rpm_time_new - rpm_time ));
+					rpm_time = rpm_time_new;
+				} 
+				rpm_triggered = 1;
+				temp_motor = temp_motor_old;
+			}
 		}
-
 		break;
 
 	case TEMP_SENSOR_NTC_100K_25C:
