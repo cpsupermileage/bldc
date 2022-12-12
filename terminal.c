@@ -207,6 +207,11 @@ void terminal_process_string(char *str) {
 		commands_printf("Voltage sample: %u", voltage_samp);
 		commands_printf("Current 1 sample: %u", current1_samp);
 		commands_printf("Current 2 sample: %u\n", current2_samp);
+	} else if (strcmp(argv[0], "smv") == 0) {
+		commands_printf("Current: %.2f\n", (double)mc_interface_get_tot_current());
+		commands_printf("RPM: %.2f\n", (double)mc_interface_get_rpm());
+		commands_printf("Tacho RPM: %.2f\n", (double)mc_interface_get_tacho_rpm());
+	
 	} else if (strcmp(argv[0], "volt") == 0) {
 		commands_printf("Input voltage: %.2f\n", (double)mc_interface_get_input_voltage_filtered());
 #ifdef HW_HAS_GATE_DRIVER_SUPPLY_MONITOR

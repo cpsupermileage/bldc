@@ -39,6 +39,9 @@
 #include "crc.h"
 #include "bms.h"
 #include "events.h"
+// USER ADDITION
+#define ADC_IND_TEMP_MOTOR		11
+
 
 #include <math.h>
 #include <stdlib.h>
@@ -60,6 +63,7 @@ typedef struct {
 	unsigned int m_cycles_running;
 	bool m_lock_enabled;
 	bool m_lock_override_once;
+	systime_t m_tacho_dt;
 	float m_motor_current_sum;
 	float m_input_current_sum;
 	float m_motor_current_iterations;
@@ -1025,6 +1029,12 @@ float mc_interface_get_sampling_frequency_now(void) {
 	}
 
 	return ret;
+}
+
+float mc_interface_get_tacho_rpm(void) 
+{
+	if (m_motor_1.m_tacho_dt == 0) return 0.0;
+	return 10 * CH_CFG_ST_FREQUENCY / (m_motor_1.m_tacho_dt);
 }
 
 float mc_interface_get_rpm(void) {
@@ -2187,6 +2197,9 @@ static void update_override_limits(volatile motor_if_state_t *motor, volatile mc
 
 	const float v_in = motor->m_input_voltage_filtered;
 	float rpm_now = 0.0;
+	static float temp_motor_old = 0.0;
+	static bool rpm_triggered = 0;
+	static systime_t rpm_time = 0;
 
 	if (motor->m_conf.motor_type == MOTOR_TYPE_FOC) {
 		// Low latency is important for avoiding oscillations
@@ -2208,8 +2221,29 @@ static void update_override_limits(volatile motor_if_state_t *motor, volatile mc
 	float temp_motor = 0.0;
 
 	switch(conf->m_motor_temp_sens_type) {
+
 	case TEMP_SENSOR_NTC_10K_25C:
-		temp_motor = is_motor_1 ? NTC_TEMP_MOTOR(conf->m_ntc_motor_beta) : NTC_TEMP_MOTOR_2(conf->m_ntc_motor_beta);
+
+		if ( ADC_VOLTS(ADC_IND_TEMP_MOTOR) > 0.4 )
+		{
+				temp_motor = is_motor_1 ? NTC_TEMP_MOTOR(conf->m_ntc_motor_beta) : NTC_TEMP_MOTOR_2(conf->m_ntc_motor_beta);
+				temp_motor_old = temp_motor;
+				rpm_triggered = 0;
+
+				// Tacho reset
+				if ( chVTTimeElapsedSinceX (rpm_time) > CH_CFG_ST_FREQUENCY ) motor->m_tacho_dt = 0;
+		} else {
+			if (rpm_triggered == 0)
+			{
+				systime_t rpm_time_new = chVTGetSystemTime();
+				motor->m_tacho_dt = rpm_time_new - rpm_time;
+				// 10 / (CH_CFG_ST_FREQUENCY * ( rpm_time_new - rpm_time ));
+				rpm_time = rpm_time_new;
+			} 
+			rpm_triggered = 1;
+			temp_motor = temp_motor_old;
+		}
+
 		break;
 
 	case TEMP_SENSOR_NTC_100K_25C:
