@@ -60,6 +60,7 @@ typedef struct {
 	unsigned int m_cycles_running;
 	bool m_lock_enabled;
 	bool m_lock_override_once;
+	float m_motor_current_rel;
 	float m_motor_current_sum;
 	float m_input_current_sum;
 	float m_motor_current_iterations;
@@ -714,8 +715,18 @@ void mc_interface_set_current_rel(float val) {
 	if (fabsf(val) > 0.001) {
 		SHUTDOWN_RESET();
 	}
-
+	motor_now()->m_motor_current_rel = val;
 	mc_interface_set_current(val * motor_now()->m_conf.lo_current_motor_max_now);
+}
+
+/**
+ * Get current relative to the minimum and maximum current limits.
+ *
+ * @return current
+ * The relative current value, range [-1.0 1.0]
+ */
+float mc_interface_get_current_rel () {
+	return motor_now()->m_motor_current_rel;
 }
 
 /**
