@@ -30,6 +30,8 @@
 #include "hw.h"
 #include <math.h>
 
+#include "power_array.h"
+
 // Settings
 #define MAX_CAN_AGE						0.1
 #define MIN_MS_WITHOUT_POWER			500
@@ -65,6 +67,8 @@ static volatile bool adc_detached = false;
 static volatile bool buttons_detached = false;
 static volatile bool rev_override = false;
 static volatile bool cc_override = false;
+static volatile float wheel_diameter = 19.5; //wheel diameter variable, used for speed calcs
+static volatile float max_amps = 20.0; //max amperage of motor, used for power calcs
 
 void app_adc_configure(adc_config *conf) {
 	if (!buttons_detached && (((conf->buttons >> 0) & 1) || CTRL_USES_BUTTON(conf->ctrl_type))) {
@@ -149,12 +153,31 @@ void app_adc_cc_override(bool state){
 	cc_override = state;
 }
 
-// To be expanded on by one Brandon
-float calc_efficient_power()
-{
-	//float rpm = mc_interface_get_rpm();
-	return 0.5;
+float get_car_speed(){
+	//returns the current speed of the car in m/s 
+	float revs = mc_interface_get_tacho_rpm();
+	float distance = revs * 3.14159 * wheel_diameter;
+	distance = distance / 39.37; //gets distance per minute in meters
+	return distance / 60; //div by 60 to get m/s
+
 }
+
+float get_power_value(float watts){
+	//returns a float between 0 and 1 to drive the motor at the desired power
+	float voltage = (mc_interface_get_rpm() / 350) * 48;
+	float amps = watts / voltage;
+	return amps / max_amps;
+
+}
+
+
+float calc_efficient_power(){
+	//returns the power input for the motor given speed and the power array
+	float speed = get_car_speed();
+	int index = (int) speed * 10;
+	return get_power_value(power_list[index]);
+}
+
 
 static THD_FUNCTION(adc_thread, arg) {
 	(void)arg;
