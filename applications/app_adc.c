@@ -164,7 +164,11 @@ float get_car_speed(){
 
 float get_power_value(float watts){
 	//returns a float between 0 and 1 to drive the motor at the desired power
-	float voltage = (mc_interface_get_rpm() / 350) * 48;
+	float rpm = mc_interface_get_rpm();
+	if (rpm < 0){
+		rpm = -(rpm);
+	}
+	float voltage = (rpm / 24000) * 48;
 	float amps = watts / voltage;
 	return amps / max_amps;
 
