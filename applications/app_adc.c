@@ -158,16 +158,45 @@ void app_adc_cc_override(bool state){
 	cc_override = state;
 }
 
+#define WHEEL_DIAMETER 19.5
+
+float get_car_speed(){
+	//returns the current speed of the car in m/s 
+	float revs = mc_interface_get_tacho_rpm();
+	float distance = revs * 3.14159 * WHEEL_DIAMETER;
+	distance = distance / 39.37; //gets distance per minute in meters
+	return distance / 60; //div by 60 to get m/s
+
+}
+
+
+#define MAX_RPM 72 * 350
+#define MAX_AMPS 20
+
+float get_power_value(float watts){
+	//returns a float between 0 and 1 to drive the motor at the desired power
+	// float max_amps = motor_now()->m_conf.lo_current_motor_max_now;
+	float rpm = mc_interface_get_rpm();
+	if (rpm < 0){
+		rpm = -(rpm);
+	}
+	float voltage = (rpm / MAX_RPM) * 48;
+	float amps = watts / voltage;
+	return amps / MAX_AMPS;
+
+}
+
+
 
 void update_speed_time(){
 	//will tick up the amount of time the car remains at a given speed, resets to 0 once a speed 
 	//change is detected
 	//NOTE: MAY NEED A BIT OF LEEWAY FOR CURRENT SPEED EQUALITY 
-	if (current_speed - 0.05 <= mc_interface_get_speed() <= current_speed + 0.05){
+	if (current_speed - 0.05 <= get_car_speed() <= current_speed + 0.05){
 		time_at_speed += 0.0001;
 	}
 	else{
-		current_speed = mc_interface_get_speed();
+		current_speed = get_car_speed();
 		time_at_speed = 0.0;
 	}
 }
@@ -176,7 +205,7 @@ void update_speed_pwr(pwr){
 	//averages the power usage while speed is constant, the variable speed_pwr can then be used to 
 	//update the appropriate variables
 	//AGAIN MAY NEED SOME LEEWAY IN EQUALITY CUZ FLOATS
-	if (current_speed - 0.05 <= mc_interface_get_speed() <= current_speed + 0.05){
+	if (current_speed - 0.05 <= get_car_speed() <= current_speed + 0.05){
 		//update power with rolling average
 		avg_pwr_at_speed = ((avg_pwr_at_speed * 1000 * time_at_speed) + pwr) / (time_at_speed * 1000);
 	}
@@ -189,7 +218,7 @@ void update_speed_pwr(pwr){
 float burn_to_speed(int speed, float pwr){
 	//Given a speed in m/s, seeks to get to that speed and maintain that power
 	//need a system to average the below values and record them int a table.
-	if (mc_interface_get_speed() < speed / 10 && pwr >= 0.5){
+	if (get_car_speed() < speed / 10 && pwr >= 0.5){
 		return 1;
 	}
 	return 0;
@@ -223,7 +252,7 @@ void change_state(float turbo, float pwr, float time_at_speed){
 	case 0:
 		//if we are in standby see if there is pwr, if so check phase and return data accordingly
 		collect = false; //whenever we get to standby, stop collecting data, whenever we leave begin
-		if (pwr >= 0.5 && mc_interface_get_speed() == 0){
+		if (pwr >= 0.5 && get_car_speed() == 0){
 			collect = true;
 			state = next;
 		}
@@ -239,7 +268,7 @@ void change_state(float turbo, float pwr, float time_at_speed){
 	
 	case 11:
 		//coast to 0 then go to standby for phase 2
-		if (mc_interface_get_speed() <= 0.5){
+		if (get_car_speed() <= 0.5){
 			state = 0;
 		}
 		break;
@@ -339,12 +368,6 @@ float execute_calibration_step(float turbo, float pwr)
 	} 
 }
 
-// To be expanded on by one Brandon
-float calc_efficient_power()
-{
-	//float rpm = mc_interface_get_rpm();
-	return 0.5;
-}
 
 static THD_FUNCTION(adc_thread, arg) {
 	(void)arg;
