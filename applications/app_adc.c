@@ -68,7 +68,7 @@ static volatile bool buttons_detached = false;
 static volatile bool rev_override = false;
 static volatile bool cc_override = false;
 static volatile float wheel_diameter = 19.5; //wheel diameter variable, used for speed calcs
-static volatile float max_amps = 20.0; //max amperage of motor, used for power calcs
+
 
 void app_adc_configure(adc_config *conf) {
 	if (!buttons_detached && (((conf->buttons >> 0) & 1) || CTRL_USES_BUTTON(conf->ctrl_type))) {
@@ -161,16 +161,18 @@ float get_car_speed(){
 	return distance / 60; //div by 60 to get m/s
 
 }
-
+#define MAX_RPM 72 * 350
+#define MAX_AMPS 20
 float get_power_value(float watts){
 	//returns a float between 0 and 1 to drive the motor at the desired power
+	// float max_amps = motor_now()->m_conf.lo_current_motor_max_now;
 	float rpm = mc_interface_get_rpm();
 	if (rpm < 0){
 		rpm = -(rpm);
 	}
-	float voltage = (rpm / 24000) * 48;
+	float voltage = (rpm / MAX_RPM) * 48;
 	float amps = watts / voltage;
-	return amps / max_amps;
+	return amps / MAX_AMPS;
 
 }
 
