@@ -64,6 +64,7 @@ typedef struct {
 	bool m_lock_enabled;
 	bool m_lock_override_once;
 	systime_t m_tacho_dt;
+	uint64_t m_tacho_count;
 	float m_motor_current_rel;
 	float m_motor_current_sum;
 	float m_input_current_sum;
@@ -1046,6 +1047,11 @@ float mc_interface_get_tacho_rpm(void)
 {
 	if (m_motor_1.m_tacho_dt == 0) return 0.0;
 	return 10 * CH_CFG_ST_FREQUENCY / (m_motor_1.m_tacho_dt);
+}
+
+uint64_t mc_interface_get_tacho_count(void) 
+{
+	return m_motor_1.m_tacho_count;
 }
 
 float mc_interface_get_rpm(void) {
@@ -2258,7 +2264,15 @@ static void update_override_limits(volatile motor_if_state_t *motor, volatile mc
 				if (rpm_triggered == 0)
 				{
 					systime_t rpm_time_new = chVTGetSystemTime();
-					motor->m_tacho_dt = dt;
+					// motor->m_tacho_dt = dt;
+					// Moving Average, filter out impossible speeds
+					if (dt > 200)
+					{
+						static float filter_val = 0.0;
+						UTILS_LP_MOVING_AVG_APPROX(filter_val, dt, 5);
+						motor->m_tacho_dt = filter_val;
+						motor->m_tacho_count ++;
+					}
 					// motor->m_tacho_dt = rpm_time_new - rpm_time;
 					// 10 / (CH_CFG_ST_FREQUENCY * ( rpm_time_new - rpm_time ));
 					rpm_time = rpm_time_new;
