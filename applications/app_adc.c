@@ -66,7 +66,7 @@ static volatile bool buttons_detached = false;
 static volatile bool rev_override = false;
 static volatile bool cc_override = false;
 //variables for calibration
-static volatile int next = 0; //keeps track of next state
+static volatile int next = 10; //keeps track of next state //set for inital phase
 static volatile int state = 0; //keeps track of current state
 static volatile int phase = 1; //keeps track of calibration phase ***work on incorperating this***
 static volatile float time_at_speed = 0; //keeps track of the time we are at a given speed
@@ -162,7 +162,8 @@ void app_adc_cc_override(bool state){
 
 float get_car_speed(){
 	//returns the current speed of the car in m/s 
-	float revs = mc_interface_get_tacho_rpm();
+	float revs = mc_interface_get_rpm();
+	revs = revs / 72;
 	float distance = revs * 3.14159 * WHEEL_DIAMETER;
 	distance = distance / 39.37; //gets distance per minute in meters
 	return distance / 60; //div by 60 to get m/s
@@ -193,7 +194,7 @@ void update_speed_time(){
 	//change is detected
 	//NOTE: MAY NEED A BIT OF LEEWAY FOR CURRENT SPEED EQUALITY 
 	if (current_speed - 0.05 <= get_car_speed() <= current_speed + 0.05){
-		time_at_speed += 0.0001;
+		time_at_speed += 0.1;
 	}
 	else{
 		current_speed = get_car_speed();
@@ -284,7 +285,7 @@ void change_state(float turbo, float pwr, float time_at_speed){
 		break;
 
 
-	//any phase 2 case where next state is an increment of 2
+	//any phase 3 case where next state is an increment of 2
 	case 120: case 125: case 130: case 135: case 140: case 145: case 150: case 155:
 
 		if (time_at_speed > 2.0){
@@ -298,7 +299,12 @@ void change_state(float turbo, float pwr, float time_at_speed){
 	case 82: case 84: case 86: case 88: case 90:
 
 		if (time_at_speed > 2.0){
-				next = state + 2; 
+				if (state == 90){
+					next = 120;
+				}
+				else {
+					next = state + 2; 
+				}
 				pwr_array[state] = avg_pwr_at_speed; //update the pwr array with the avg power 
 				state = 0;
 			}	
