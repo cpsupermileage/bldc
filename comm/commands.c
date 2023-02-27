@@ -408,8 +408,8 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 			buffer_append_float16(send_buffer, mc_interface_get_duty_cycle_now(), 1e3, &ind);
 		}
 		if (mask & ((uint32_t)1 << 7)) {
-			// buffer_append_float32(send_buffer, mc_interface_get_rpm(), 1e0, &ind);
-			buffer_append_float32(send_buffer, mc_interface_get_tacho_rpm(), 1e0, &ind);
+			buffer_append_float32(send_buffer, mc_interface_get_rpm(), 1e0, &ind);
+			// buffer_append_float32(send_buffer, mc_interface_get_tacho_rpm(), 1e0, &ind);
 		}
 		if (mask & ((uint32_t)1 << 8)) {
 			buffer_append_float16(send_buffer, mc_interface_get_input_voltage_filtered(), 1e1, &ind);
@@ -469,6 +469,12 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 			status |= timeout_has_timeout();
 			status |= timeout_kill_sw_active() << 1;
 			send_buffer[ind++] = status;
+		}
+		if (mask & ((uint32_t)1 << 22)) {
+			buffer_append_float32(send_buffer, mc_interface_get_tacho_rpm(), 1e0, &ind);
+		}
+		if (mask & ((uint32_t)1 << 23)) {
+			buffer_append_uint32(send_buffer, mc_interface_get_tacho_count(), &ind);
 		}
 
 		reply_func(send_buffer, ind);
@@ -878,8 +884,8 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 			buffer_append_float16(send_buffer, mc_interface_get_duty_cycle_now(), 1e3, &ind);
 		}
 		if (mask & ((uint32_t)1 << 5)) {
-			// buffer_append_float32(send_buffer, mc_interface_get_rpm(), 1e0, &ind);
-			buffer_append_float32(send_buffer, mc_interface_get_tacho_rpm(), 1e0, &ind);
+			buffer_append_float32(send_buffer, mc_interface_get_rpm(), 1e0, &ind);
+			// buffer_append_float32(send_buffer, mc_interface_get_tacho_rpm(), 1e0, &ind);
 		}
 		if (mask & ((uint32_t)1 << 6)) {
 			buffer_append_float32(send_buffer, mc_interface_get_speed(), 1e3, &ind);
@@ -934,6 +940,12 @@ void commands_process_packet(unsigned char *data, unsigned int len,
 		}
 		if (mask & ((uint32_t)1 << 21)) {
 			buffer_append_uint32(send_buffer, chVTGetSystemTimeX() / (CH_CFG_ST_FREQUENCY / 1000), &ind);
+		}
+		if (mask & ((uint32_t)1 << 22)) {
+			buffer_append_float32(send_buffer, mc_interface_get_tacho_rpm(), 1e0, &ind);
+		}
+		if (mask & ((uint32_t)1 << 23)) {
+			buffer_append_uint32(send_buffer, mc_interface_get_tacho_count(), &ind);
 		}
 
 		reply_func(send_buffer, ind);
