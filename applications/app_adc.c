@@ -260,7 +260,8 @@ void change_state(float turbo, float pwr, float time_at_speed){
 		break;
 
 	case 10:
-		//check to see if we're at max speed then go to special coast state i forgor to code
+		//check to see if we're at max speed then go to coast state
+		phase = 1;
 		if (time_at_speed > 2.0){
 			next = 20;
 			state = 11;
@@ -276,6 +277,7 @@ void change_state(float turbo, float pwr, float time_at_speed){
 	
 	//any phase 2 case where next state is an increment of 5 
 	case 20: case 25: case 30: case 35: case 40: case 45: case 50: case 55: 
+		phase = 2;
 
 		if (time_at_speed > 2.0){
 				next = state + 5; 
@@ -287,6 +289,7 @@ void change_state(float turbo, float pwr, float time_at_speed){
 
 	//any phase 3 case where next state is an increment of 2
 	case 120: case 125: case 130: case 135: case 140: case 145: case 150: case 155:
+		phase = 3;
 
 		if (time_at_speed > 2.0){
 				next = state + 5; 
@@ -325,6 +328,7 @@ void change_state(float turbo, float pwr, float time_at_speed){
 		//if we aren't in a state treat as though we are in standby
 		next = 10;
 		state = 0;
+		phase = 1;
 		break;
 
 	}
