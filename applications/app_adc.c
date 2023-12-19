@@ -36,6 +36,8 @@
 #define FILTER_SAMPLES					5
 #define RPM_FILTER_SAMPLES				8
 #define TC_DIFF_MAX_PASS				60  // TODO: move to app_conf
+#define POLES                           72  //how many poles our motor has
+#define SPEED                           10.0 //average speed in meters / second (used for avg driving mode)
 
 #define CTRL_USES_BUTTON(ctrl_type)(\
 		ctrl_type == ADC_CTRL_TYPE_CURRENT_REV_BUTTON || \
@@ -66,14 +68,14 @@ static volatile bool buttons_detached = false;
 static volatile bool rev_override = false;
 static volatile bool cc_override = false;
 //variables for calibration
-static volatile int next = 10; //keeps track of next state //set for inital phase
-static volatile int state = 0; //keeps track of current state
-static volatile int phase = 1; //keeps track of calibration phase ***work on incorperating this***
-static volatile float time_at_speed = 0; //keeps track of the time we are at a given speed
+//static volatile int next = 10; //keeps track of next state //set for inital phase
+//static volatile int state = 0; //keeps track of current state
+//static volatile int phase = 1; //keeps track of calibration phase ***work on incorperating this***
+//static volatile float time_at_speed = 0; //keeps track of the time we are at a given speed
 static volatile float pwr_array[90] = {0.0}; //records powers in phase 2 to be read in phase 3
-static volatile bool collect = false; //flag for PI, states if data should be read or not
-static volatile float current_speed = 0.0;  // what it says on the tin
-static volatile float avg_pwr_at_speed = 0.0; // what it says on the tin
+//static volatile bool collect = false; //flag for PI, states if data should be read or not
+//static volatile float current_speed = 0.0;  // what it says on the tin
+//static volatile float avg_pwr_at_speed = 0.0; // what it says on the tin
 
 void app_adc_configure(adc_config *conf) {
 	if (!buttons_detached && (((conf->buttons >> 0) & 1) || CTRL_USES_BUTTON(conf->ctrl_type))) {
@@ -163,8 +165,8 @@ void app_adc_cc_override(bool state){
 float get_car_speed(){
 	//returns the current speed of the car in m/s 
 	float revs = mc_interface_get_rpm();
-	revs = revs / 72;
-	float distance = revs * 3.14159 * WHEEL_DIAMETER;
+	revs = revs / POLES; 
+	float distance = revs * 3.1415926 * WHEEL_DIAMETER;
 	distance = distance / 39.37; //gets distance per minute in meters
 	return distance / 60; //div by 60 to get m/s
 
@@ -189,194 +191,195 @@ float get_power_value(float watts){
 
 
 
-void update_speed_time(){
-	//will tick up the amount of time the car remains at a given speed, resets to 0 once a speed 
-	//change is detected
-	//NOTE: MAY NEED A BIT OF LEEWAY FOR CURRENT SPEED EQUALITY 
-	if (current_speed - 0.05 <= get_car_speed() <= current_speed + 0.05){
-		time_at_speed += 0.1;
-	}
-	else{
-		current_speed = get_car_speed();
-		time_at_speed = 0.0;
-	}
-}
+// void update_speed_time(){
+// 	//will tick up the amount of time the car remains at a given speed, resets to 0 once a speed 
+// 	//change is detected
+// 	//NOTE: MAY NEED A BIT OF LEEWAY FOR CURRENT SPEED EQUALITY 
+// 	if (current_speed - 0.05 <= get_car_speed() <= current_speed + 0.05){
+// 		time_at_speed += 0.1;
+// 	}
+// 	else{
+// 		current_speed = get_car_speed();
+// 		time_at_speed = 0.0;
+// 	}
+// }
 
-void update_speed_pwr(pwr){
-	//averages the power usage while speed is constant, the variable speed_pwr can then be used to 
-	//update the appropriate variables
-	//AGAIN MAY NEED SOME LEEWAY IN EQUALITY CUZ FLOATS
-	if (current_speed - 0.05 <= get_car_speed() <= current_speed + 0.05){
-		//update power with rolling average
-		avg_pwr_at_speed = ((avg_pwr_at_speed * 1000 * time_at_speed) + pwr) / (time_at_speed * 1000);
-	}
-	else{
-		//if 1st time at speed start the average off at the current power
-		avg_pwr_at_speed = pwr;
-	}
-}
+// void update_speed_pwr(pwr){
+// 	//averages the power usage while speed is constant, the variable speed_pwr can then be used to 
+// 	//update the appropriate variables
+// 	//AGAIN MAY NEED SOME LEEWAY IN EQUALITY CUZ FLOATS
+// 	if (current_speed - 0.05 <= get_car_speed() <= current_speed + 0.05){
+// 		//update power with rolling average
+// 		avg_pwr_at_speed = ((avg_pwr_at_speed * 1000 * time_at_speed) + pwr) / (time_at_speed * 1000);
+// 	}
+// 	else{
+// 		//if 1st time at speed start the average off at the current power
+// 		avg_pwr_at_speed = pwr;
+// 	}
+// }
 
-float burn_to_speed(int speed, float pwr){
-	//Given a speed in m/s, seeks to get to that speed and maintain that power
-	//need a system to average the below values and record them int a table.
-	if (get_car_speed() < speed / 10 && pwr >= 0.5){
+float burn_to_speed(float speed, float pwr){
+	//Given a speed in m/s, seeks to get to that speed and maintain that power if button is pressed
+	//use for average driving mode button, or turbo
+	if (get_car_speed() < speed && pwr >= 0.5){
 		return 1;
 	}
 	return 0;
 }
 
-float burn_at_power(int state, float pwr){
-	//Given the state and the power array, lookup power for that state and drive at that power
+float burn_at_power(float pwr){
+	//lookup the speed, calculate the desired power for it and drive at that power
+	//use for the standard drive mode
 	if (pwr >= 0.5){
-		return pwr_array[state];
+		return pwr_array[round(get_car_speed() * 10)];
 	}
 	return 0;
 }
 
-float standby_no_data(float turbo){
-	//function is called if we are in standby 
-	if ( turbo >= 0.5 ){
-		return 1.0;
-	}
+// float standby_no_data(float turbo){
+// 	//function is called if we are in standby 
+// 	if ( turbo >= 0.5 ){
+// 		return 1.0;
+// 	}
 
-	else{
-		return 0.0;
-	}
+// 	else{
+// 		return 0.0;
+// 	}
 	
-}
+// }
 
-void change_state(float turbo, float pwr, float time_at_speed){
-	//given the current state, next state, if pwr is high, and how long we've been at a speed
-	//we select the next state, need a system to discard data and go to appropriate place if turbo
-	switch (state)
-	{
-	case 0:
-		//if we are in standby see if there is pwr, if so check phase and return data accordingly
-		collect = false; //whenever we get to standby, stop collecting data, whenever we leave begin
-		if (pwr >= 0.5 && get_car_speed() == 0){
-			collect = true;
-			state = next;
-		}
-		break;
+// void change_state(float turbo, float pwr, float time_at_speed){
+// 	//given the current state, next state, if pwr is high, and how long we've been at a speed
+// 	//we select the next state, need a system to discard data and go to appropriate place if turbo
+// 	switch (state)
+// 	{
+// 	case 0:
+// 		//if we are in standby see if there is pwr, if so check phase and return data accordingly
+// 		collect = false; //whenever we get to standby, stop collecting data, whenever we leave begin
+// 		if (pwr >= 0.5 && get_car_speed() == 0){
+// 			collect = true;
+// 			state = next;
+// 		}
+// 		break;
 
-	case 10:
-		//check to see if we're at max speed then go to coast state
-		phase = 1;
-		if (time_at_speed > 2.0){
-			next = 20;
-			state = 11;
-		}
-		break;
+// 	case 10:
+// 		//check to see if we're at max speed then go to coast state
+// 		phase = 1;
+// 		if (time_at_speed > 2.0){
+// 			next = 20;
+// 			state = 11;
+// 		}
+// 		break;
 	
-	case 11:
-		//coast to 0 then go to standby for phase 2
-		if (get_car_speed() <= 0.5){
-			state = 0;
-		}
-		break;
+// 	case 11:
+// 		//coast to 0 then go to standby for phase 2
+// 		if (get_car_speed() <= 0.5){
+// 			state = 0;
+// 		}
+// 		break;
 	
-	//any phase 2 case where next state is an increment of 5 
-	case 20: case 25: case 30: case 35: case 40: case 45: case 50: case 55: 
-		phase = 2;
+// 	//any phase 2 case where next state is an increment of 5 
+// 	case 20: case 25: case 30: case 35: case 40: case 45: case 50: case 55: 
+// 		phase = 2;
 
-		if (time_at_speed > 2.0){
-				next = state + 5; 
-				pwr_array[state] = avg_pwr_at_speed; //update the pwr array with the avg power 
-				state = 0; //resets state to standby so we jump to the next state on the next loop
-			}	
-		break;
+// 		if (time_at_speed > 2.0){
+// 				next = state + 5; 
+// 				pwr_array[state] = avg_pwr_at_speed; //update the pwr array with the avg power 
+// 				state = 0; //resets state to standby so we jump to the next state on the next loop
+// 			}	
+// 		break;
 
 
-	//any phase 3 case where next state is an increment of 2
-	case 120: case 125: case 130: case 135: case 140: case 145: case 150: case 155:
-		phase = 3;
+// 	//any phase 3 case where next state is an increment of 2
+// 	case 120: case 125: case 130: case 135: case 140: case 145: case 150: case 155:
+// 		phase = 3;
 
-		if (time_at_speed > 2.0){
-				next = state + 5; 
-				state = 0;
-			}	
-		break;
+// 		if (time_at_speed > 2.0){
+// 				next = state + 5; 
+// 				state = 0;
+// 			}	
+// 		break;
 	
-	//any phase 2 case where next state is an increment of 2
-	case 60: case 62: case 64: case 66: case 68: case 70: case 72: case 74: case 78: case 80:
-	case 82: case 84: case 86: case 88: case 90:
+// 	//any phase 2 case where next state is an increment of 2
+// 	case 60: case 62: case 64: case 66: case 68: case 70: case 72: case 74: case 78: case 80:
+// 	case 82: case 84: case 86: case 88: case 90:
 
-		if (time_at_speed > 2.0){
-				if (state == 90){
-					next = 120;
-				}
-				else {
-					next = state + 2; 
-				}
-				pwr_array[state] = avg_pwr_at_speed; //update the pwr array with the avg power 
-				state = 0;
-			}	
-		break;
+// 		if (time_at_speed > 2.0){
+// 				if (state == 90){
+// 					next = 120;
+// 				}
+// 				else {
+// 					next = state + 2; 
+// 				}
+// 				pwr_array[state] = avg_pwr_at_speed; //update the pwr array with the avg power 
+// 				state = 0;
+// 			}	
+// 		break;
 
 	
-	//any phase 3 case where next state is an increment of 2
-	case 160: case 162: case 164: case 166: case 168: case 170: case 172: case 174: case 178: 
-	case 180: case 182: case 184: case 186: case 188: case 190:
+// 	//any phase 3 case where next state is an increment of 2
+// 	case 160: case 162: case 164: case 166: case 168: case 170: case 172: case 174: case 178: 
+// 	case 180: case 182: case 184: case 186: case 188: case 190:
 	
-		if (time_at_speed > 2.0){
-				next = state + 2; 
-				state =  0;
-			}	
-		break;
+// 		if (time_at_speed > 2.0){
+// 				next = state + 2; 
+// 				state =  0;
+// 			}	
+// 		break;
 	
-	default:
-		//if we aren't in a state treat as though we are in standby
-		next = 10;
-		state = 0;
-		phase = 1;
-		break;
+// 	default:
+// 		//if we aren't in a state treat as though we are in standby
+// 		next = 10;
+// 		state = 0;
+// 		phase = 1;
+// 		break;
 
-	}
-}
+// 	}
+// }
 
-float execute_calibration_step(float turbo, float pwr)
-{
-	//given the state we are in, this function will return the appropriate motor power
+// float execute_calibration_step(float turbo, float pwr)
+// {
+// 	//given the state we are in, this function will return the appropriate motor power
 
-	switch (state)
-	{
-	case 0:
-		//standby allow the car to be positioned for the next state
-		return standby_no_data(turbo);
-		break;
+// 	switch (state)
+// 	{
+// 	case 0:
+// 		//standby allow the car to be positioned for the next state
+// 		return standby_no_data(turbo);
+// 		break;
 	
-	case 10:
-		//max power burn, return 1.0
-		return 1.0;
-		break;
+// 	case 10:
+// 		//max power burn, return 1.0
+// 		return 1.0;
+// 		break;
 	
-	case 11:
-		//coast collection state
-		return 0.0;
-		break;
+// 	case 11:
+// 		//coast collection state
+// 		return 0.0;
+// 		break;
 	
-	//next group of states is phase 2 where we go to each speed and record the power in pwr array
-	case 20: case 25: case 30: case 35: case 40: case 45: case 50: case 55: case 60: 
-	case 62: case 64: case 66: case 68: case 70: case 72: case 74: case 78: case 80:
-	case 82: case 84: case 86: case 88: case 90:
+// 	//next group of states is phase 2 where we go to each speed and record the power in pwr array
+// 	case 20: case 25: case 30: case 35: case 40: case 45: case 50: case 55: case 60: 
+// 	case 62: case 64: case 66: case 68: case 70: case 72: case 74: case 78: case 80:
+// 	case 82: case 84: case 86: case 88: case 90:
 
-		return burn_to_speed(state, pwr);
-		break;
+// 		return burn_to_speed(state, pwr);
+// 		break;
 	
-	//next group of states is phase 3 where we go through each power in the power array
-	case 120: case 125: case 130: case 135: case 140: case 145: case 150: case 155: case 160: 
-	case 162: case 164: case 166: case 168: case 170: case 172: case 174: case 178: case 180:
-	case 182: case 184: case 186: case 188: case 190:
+// 	//next group of states is phase 3 where we go through each power in the power array
+// 	case 120: case 125: case 130: case 135: case 140: case 145: case 150: case 155: case 160: 
+// 	case 162: case 164: case 166: case 168: case 170: case 172: case 174: case 178: case 180:
+// 	case 182: case 184: case 186: case 188: case 190:
 
-		return burn_at_power(state - 100, pwr);
-		break;
+// 		return burn_at_power(state - 100, pwr);
+// 		break;
 
-	default:
-		//if we aren't in a state treat as though we are in standby
-		return standby_no_data(turbo);
-		break;
-	} 
-}
+// 	default:
+// 		//if we aren't in a state treat as though we are in standby
+// 		return standby_no_data(turbo);
+// 		break;
+// 	} 
+// }
 
 
 static THD_FUNCTION(adc_thread, arg) {
@@ -587,10 +590,22 @@ static THD_FUNCTION(adc_thread, arg) {
 
 		// Turbo vs Normal Button Selection
 		//update the state and then find the appropriate power. That's it
-		update_speed_time();
-		change_state(turbo, pwr, time_at_speed);
-		pwr = execute_calibration_step(turbo, pwr);
-		update_speed_pwr(); //keeps the average power at speed for storage in array
+
+		//Functional block for telling the car how to accelerate
+		// update_speed_time();
+		// change_state(turbo, pwr, time_at_speed);
+		// pwr = execute_calibration_step(turbo, pwr);
+		// update_speed_pwr(); 
+		if (pwr >= 0.5){ //standard drive mode
+			pwr = burn_at_power(pwr);
+		}
+		else if (turbo >= 0.5){ //turbo / avg drive mode
+			pwr = burn_to_speed(SPEED, turbo);
+		}
+		else{ //no power if neither button pressed
+			pwr = 0;
+		}
+		//keeps the average power at speed for storage in array
 		// Apply throttle curve
 		// pwr = utils_throttle_curve(pwr, config.throttle_exp, config.throttle_exp_brake, config.throttle_exp_mode);
 
