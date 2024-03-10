@@ -91,7 +91,7 @@ typedef struct {
 	float m_input_voltage_filtered;
 	float m_input_voltage_filtered_slower;
 	float m_temp_override;
-
+	float smv_rpm_max;
 	// Backup data counters
 	uint64_t m_odometer_last;
 	uint64_t m_runtime_last;
@@ -650,6 +650,12 @@ void mc_interface_set_pid_pos(float pos) {
 	}
 
 	events_add("set_pid_pos", pos);
+}
+
+void mc_interface_set_smv_rpm(float rpm)
+{
+	motor_now()->smv_rpm_max = rpm;
+	return;
 }
 
 void mc_interface_set_current(float current) {
@@ -2412,8 +2418,9 @@ static void update_override_limits(volatile motor_if_state_t *motor, volatile mc
 
 	// RPM max
 	float lo_max_rpm = 0.0;
-	const float rpm_pos_cut_start = conf->l_max_erpm * conf->l_erpm_start;
-	const float rpm_pos_cut_end = conf->l_max_erpm;
+	float override_max = MIN(conf->l_max_erpm,motor_now()->smv_rpm_max);
+	const float rpm_pos_cut_start = override_max * conf->l_erpm_start;
+	const float rpm_pos_cut_end = override_max;
 	if (rpm_now < (rpm_pos_cut_start + 0.1)) {
 		lo_max_rpm = l_current_max_tmp;
 	} else if (rpm_now > (rpm_pos_cut_end - 0.1)) {

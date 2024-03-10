@@ -45,6 +45,11 @@
 		ctrl_type == ADC_CTRL_TYPE_DUTY_REV_BUTTON || \
 		ctrl_type == ADC_CTRL_TYPE_PID_REV_BUTTON)
 
+#define MAX_SPEED 21.5
+			#define MAX_ERPM  28200
+			#define MAX_MAX_ERPM 30000
+			#define SPEED(a) (a / MAX_SPEED * MAX_ERPM)
+
 // Threads
 static THD_FUNCTION(adc_thread, arg);
 static THD_WORKING_AREA(adc_thread_wa, 512);
@@ -366,10 +371,13 @@ static THD_FUNCTION(adc_thread, arg) {
 		if ( turbo >= 0.5 )
 		{
 			pwr = 1.0;
+			mc_interface_set_smv_rpm(SPEED(22));
 		}
 		else if ( pwr >= 0.5 )
 		{
-			pwr = calc_efficient_power();
+			// pwr = calc_efficient_power();
+			pwr = 0.8;
+			mc_interface_set_smv_rpm(SPEED(17));
 		}
 		else
 		{
