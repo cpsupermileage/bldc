@@ -54,6 +54,31 @@
 static THD_FUNCTION(adc_thread, arg);
 static THD_WORKING_AREA(adc_thread_wa, 512);
 
+//copy paste throttle sheet from python, each inex is the speed * 10 it is for
+static const __uint8_t power_vals[230] = {100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+								 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+								 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+								 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+								 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+								 050, 050, 050, 050, 050, 050, 050, 050, 050, 050,
+								 050, 050, 050, 050, 050, 050, 050, 050, 050, 050,
+								 050, 050, 050, 050, 050, 050, 050, 050, 050, 050,
+								 070, 070, 070, 070, 070, 070, 070, 070, 070, 070, 
+								 070, 070, 070, 070, 070, 070, 070, 070, 070, 070, 
+								 070, 070, 070, 070, 070, 070, 070, 070, 070, 070, 
+								 070, 070, 070, 070, 070, 070, 070, 070, 070, 070, 
+								 080, 080, 080, 080, 080, 080, 080, 080, 080, 080, 
+								 080, 080, 080, 080, 080, 080, 080, 080, 080, 080, 
+								 080, 080, 080, 080, 080, 080, 080, 080, 080, 080, 
+								 080, 080, 080, 080, 080, 080, 080, 080, 080, 080, 
+								 080, 080, 080, 080, 080, 080, 080, 080, 080, 080, 
+								 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+								 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+								 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+								 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+								 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
+								 100, 100, 100, 100, 100, 100, 100, 100, 100, 100};
+
 // Private variables
 static volatile adc_config config;
 static volatile float ms_without_power = 0.0;
@@ -367,17 +392,22 @@ static THD_FUNCTION(adc_thread, arg) {
 		// Apply deadband
 		utils_deadband(&pwr, config.hyst, 1.0);
 
+		
 		// Turbo vs Normal Button Selection
 		if ( turbo >= 0.5 )
 		{
 			pwr = 1.0;
 			mc_interface_set_smv_rpm(SPEED(22));
 		}
-		else if ( pwr >= 0.5 )
-		{
-			// pwr = calc_efficient_power();
-			pwr = 0.8;
-			mc_interface_set_smv_rpm(SPEED(17));
+		else if ( pwr >= 0.5 ){
+			int speed_index = int((mc_interface_get_rpm() / 1256.41) * 10);  //ERPM MAX 19.5mph = 24500 eRPM
+			if (speed_index >= 0 && speed_index < 200){
+				pwr = float(power_vals[speed_index])/100; //CHANGE THIS FOR CALIBRATION DATA COLLECTION, BUID COMMAND = make fw_410
+			}
+			else{
+				pwr = 1.0;
+			}
+			mc_interface_set_smv_rpm(SPEED(22));
 		}
 		else
 		{
